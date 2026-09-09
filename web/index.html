@@ -268,6 +268,8 @@ async function loadPos(){
         <div class="kv"><span>Contratos</span><b>${p.contracts}</b></div>
         <div class="kv"><span>Prima entrada</span><b>${fmt(p.entry_premium,2)}</b></div>
         <div class="kv"><span>Valor actual</span><b>${p.current_premium==null?'—':fmt(p.current_premium,2)}</b></div>
+        <div class="kv"><span>Costo total</span><b>${money(Number(p.entry_premium)*100*Number(p.contracts||1))}</b></div>
+        <div class="kv"><span>Valor posición</span><b>${cp==null?'—':money(cp*100*Number(p.contracts||1))}</b></div>
         <div class="kv"><span>Delta actual</span><b>${p.current_delta==null?'—':fmt(Math.abs(p.current_delta),2)}</b></div>
         <div class="kv"><span>IV Rank ahora</span><b>${p.current_iv_rank==null?'—':fmt(p.current_iv_rank,0)+'%'}</b></div>
         <div class="kv"><span>Abierta</span><b>${esc(p.entry_date)}</b></div>
