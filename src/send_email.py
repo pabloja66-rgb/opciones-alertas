@@ -141,21 +141,23 @@ def build_email(alerts: list[dict]) -> tuple[str, str]:
 
 
 # --------------------------------------------------------------------------- #
-def send(subject: str, html: str) -> None:
+def send(subject: str, html: str, recipients: list[str]) -> None:
     msg = MIMEText(html, "html", "utf-8")
     msg["Subject"] = subject
     msg["From"] = config.GMAIL_ADDRESS
-    msg["To"] = ", ".join(config.EMAIL_RECIPIENTS)
+    msg["To"] = ", ".join(recipients)
     ctx = ssl.create_default_context()
     with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as s:
         s.starttls(context=ctx)
         s.login(config.GMAIL_ADDRESS, config.GMAIL_APP_PASSWORD)
-        s.sendmail(config.GMAIL_ADDRESS, config.EMAIL_RECIPIENTS, msg.as_string())
+        s.sendmail(config.GMAIL_ADDRESS, recipients, msg.as_string())
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Envía el correo de alertas")
     ap.add_argument("--dry-run", action="store_true", help="escribe el HTML, no envía")
+    ap.add_argument("--test", action="store_true",
+                    help="envía solo a GMAIL_ADDRESS y NO marca las alertas como enviadas")
     args = ap.parse_args()
 
     alerts = fetch_unemailed()
@@ -163,9 +165,12 @@ def main() -> int:
         print("No hay alertas pendientes de enviar.")
         return 0
 
+    recipients = [config.GMAIL_ADDRESS] if args.test else config.EMAIL_RECIPIENTS
     subject, html = build_email(alerts)
+    if args.test:
+        subject = "[PRUEBA] " + subject
     print(f"Asunto: {subject}")
-    print(f"Para:   {', '.join(config.EMAIL_RECIPIENTS)}")
+    print(f"Para:   {', '.join(recipients)}")
     print(f"Alertas: {len(alerts)}")
 
     if args.dry_run:
@@ -179,7 +184,10 @@ def main() -> int:
     if not config.GMAIL_APP_PASSWORD:
         print("ERROR: falta GMAIL_APP_PASSWORD en .env", file=sys.stderr)
         return 1
-    send(subject, html)
+    send(subject, html, recipients)
+    if args.test:
+        print(f"\n[PRUEBA] Enviado a {config.GMAIL_ADDRESS}. Alertas NO marcadas.")
+        return 0
     mark_emailed([a["alert_id"] for a in alerts])
     print(f"\nEnviado. {len(alerts)} alertas marcadas como emailed=true.")
     return 0
