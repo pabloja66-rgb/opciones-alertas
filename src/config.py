@@ -1,8 +1,16 @@
 """Configuración central del sistema de alertas de opciones."""
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# La consola de Windows suele ser cp1252 y revienta con acentos/símbolos.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")

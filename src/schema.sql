@@ -48,6 +48,51 @@ alter table iv_rank_cache add column if not exists iv_max_window  numeric;
 alter table iv_rank_cache add column if not exists n_observations integer;  -- nº de fotos en la ventana
 alter table iv_rank_cache add column if not exists as_of_date     date;     -- fecha de la IV actual usada
 
+-- ----- Reglas de alerta (spec sec. 3 y 5) -------------------
+--  Umbrales editables sin tocar código. Una fila = una regla.
+create table if not exists alert_rules (
+    rule_id      text        primary key,
+    type         text        not null,     -- 'sell_put' | 'buy_call'
+    applies_to   text        not null default 'open',  -- 'open' | 'open_position' (sec. 10)
+    iv_rank_min  numeric,                  -- null = sin límite inferior
+    iv_rank_max  numeric,                  -- null = sin límite superior
+    delta_min    numeric,
+    delta_max    numeric,
+    dte_min      integer,
+    dte_max      integer,                  -- null = sin límite superior
+    active       boolean     not null default true,
+    notes        text
+);
+
+-- ----- Alertas generadas (spec sec. 5) ---------------------
+create table if not exists alerts (
+    alert_id          text        primary key,  -- ticker:rule:YYYY-MM-DD
+    ticker            text        not null,
+    rule_type         text        not null,
+    rule_id           text,
+    strike            numeric,
+    expiration        date,
+    dte               integer,
+    delta             numeric,
+    theta             numeric,
+    iv                numeric,               -- IV del contrato
+    iv_rank           numeric,               -- IV Rank del ticker al disparar
+    premium_estimate  numeric,               -- por acción (x100 = por contrato)
+    underlying_price  numeric,
+    reasons           jsonb       not null default '[]',
+    created_at        timestamptz not null default now(),
+    emailed           boolean     not null default false
+);
+create index if not exists alerts_ticker_created_idx on alerts (ticker, created_at desc);
+
+-- ----- Semilla de reglas de apertura (spec sec. 3) --------
+insert into alert_rules (rule_id, type, iv_rank_min, iv_rank_max, delta_min, delta_max, dte_min, dte_max, notes) values
+    ('sell_put_income', 'sell_put', 55, null, 0.20, 0.30, 25, 45,
+     'Vender PUT para generar prima. Strike <= precio actual (OTM).'),
+    ('buy_call_leaps',  'buy_call', null, 40,  0.70, 0.85, 180, null,
+     'Comprar CALL LEAPS como sustituto de accion, alta conviccion de largo plazo.')
+on conflict (rule_id) do nothing;
+
 -- ----- Semilla de tickers vigilados ------------------------
 insert into watched_tickers (symbol) values
     ('HOOD'), ('PLTR'), ('TSLA'), ('DUOL'), ('AMD'), ('HIMS'),

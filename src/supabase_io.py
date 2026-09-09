@@ -50,6 +50,53 @@ def fetch_iv_history(select: str = "ticker,date,atm_iv") -> list[dict]:
         offset += step
 
 
+def get_active_rules() -> list[dict]:
+    resp = _session.get(
+        f"{SUPABASE_URL}/rest/v1/alert_rules",
+        headers=_headers(),
+        params={"select": "*", "active": "eq.true", "applies_to": "eq.open"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_iv_rank_map() -> dict[str, dict]:
+    resp = _session.get(
+        f"{SUPABASE_URL}/rest/v1/iv_rank_cache",
+        headers=_headers(),
+        params={"select": "*"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return {r["ticker"]: r for r in resp.json()}
+
+
+def recent_alerts(since_iso: str) -> list[dict]:
+    resp = _session.get(
+        f"{SUPABASE_URL}/rest/v1/alerts",
+        headers=_headers(),
+        params={"select": "*", "created_at": f"gte.{since_iso}", "order": "created_at.desc"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def upsert_alerts(rows: list[dict]) -> int:
+    if not rows:
+        return 0
+    resp = _session.post(
+        f"{SUPABASE_URL}/rest/v1/alerts",
+        headers=_headers({"Prefer": "resolution=merge-duplicates,return=minimal"}),
+        json=rows,
+        timeout=60,
+    )
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Supabase {resp.status_code}: {resp.text[:400]}")
+    return len(rows)
+
+
 def upsert_iv_rank(rows: list[dict]) -> int:
     resp = _session.post(
         f"{SUPABASE_URL}/rest/v1/iv_rank_cache",

@@ -60,16 +60,31 @@ def daily_closes(symbol: str) -> dict[str, float]:
     return {d: float(v["4. close"]) for d, v in series.items()}
 
 
-def historical_options(symbol: str, date: str) -> list[dict]:
-    """Cadena de opciones completa de `symbol` en `date` (YYYY-MM-DD). Premium."""
-    payload = _get({
-        "function": "HISTORICAL_OPTIONS",
-        "symbol": symbol,
-        "date": date,
-    })
+def historical_options(symbol: str, date: str | None = None) -> list[dict]:
+    """Cadena de opciones completa de `symbol`.
+
+    Con `date` (YYYY-MM-DD): esa sesión histórica.
+    Sin `date`: la sesión de mercado anterior (lo que usa el job diario tras el
+    cierre para tener el cierre del día). Endpoint premium.
+    """
+    params = {"function": "HISTORICAL_OPTIONS", "symbol": symbol}
+    if date:
+        params["date"] = date
+    payload = _get(params)
     time.sleep(REQUEST_SLEEP)
     data = payload.get("data")
     if data is None:
         # días sin sesión, o antes de que existieran las opciones del ticker
         return []
     return data
+
+
+def global_quote(symbol: str) -> dict:
+    """Precio y volumen más recientes del subyacente (endpoint gratuito)."""
+    payload = _get({"function": "GLOBAL_QUOTE", "symbol": symbol})
+    time.sleep(REQUEST_SLEEP)
+    q = payload.get("Global Quote") or payload.get("Global Quote - DATA DELAYED BY 15 MINUTES") or {}
+    return {
+        "price": float(q["05. price"]) if q.get("05. price") else None,
+        "latest_day": q.get("07. latest trading day"),
+    }
