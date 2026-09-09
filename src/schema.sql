@@ -84,14 +84,28 @@ create table if not exists alerts (
     emailed           boolean     not null default false
 );
 create index if not exists alerts_ticker_created_idx on alerts (ticker, created_at desc);
+-- métricas de "qué tan cara está la prima" (ver src/metrics.py)
+alter table alerts add column if not exists intrinsic                     numeric;
+alter table alerts add column if not exists extrinsic                     numeric;
+alter table alerts add column if not exists breakeven_price              numeric;
+alter table alerts add column if not exists breakeven_move_pct           numeric;  -- call: % que debe subir; put: % que puede caer (negativo)
+alter table alerts add column if not exists breakeven_move_annualized_pct numeric;
+alter table alerts add column if not exists premium_pct_of_underlying    numeric;
+alter table alerts add column if not exists effective_leverage           numeric;  -- solo calls
+alter table alerts add column if not exists return_on_capital_pct        numeric;  -- solo puts (prima / garantía)
+alter table alerts add column if not exists return_annualized_pct        numeric;  -- solo puts
 
 -- ----- Semilla de reglas de apertura (spec sec. 3) --------
 insert into alert_rules (rule_id, type, iv_rank_min, iv_rank_max, delta_min, delta_max, dte_min, dte_max, notes) values
     ('sell_put_income', 'sell_put', 55, null, 0.20, 0.30, 25, 45,
      'Vender PUT para generar prima. Strike <= precio actual (OTM).'),
-    ('buy_call_leaps',  'buy_call', null, 40,  0.70, 0.85, 180, null,
-     'Comprar CALL LEAPS como sustituto de accion, alta conviccion de largo plazo.')
+    ('buy_call_leaps',  'buy_call', null, 40,  0.70, 0.85, 180, 550,
+     'Comprar CALL LEAPS (6-18 meses) como sustituto de accion. Prefiere ~12 meses.')
 on conflict (rule_id) do nothing;
+
+-- tope de 18 meses para LEAPS en instalaciones previas donde quedó abierto
+update alert_rules set dte_max = 550
+ where rule_id = 'buy_call_leaps' and dte_max is null;
 
 -- ----- Semilla de tickers vigilados ------------------------
 insert into watched_tickers (symbol) values

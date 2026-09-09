@@ -26,6 +26,7 @@ import datetime as dt
 import sys
 
 from alpha_vantage import AlphaVantageError, global_quote, historical_options
+from metrics import call_metrics, put_metrics
 from supabase_io import (
     get_active_rules,
     get_active_tickers,
@@ -37,6 +38,7 @@ import config
 
 DEDUP_HOURS = 48
 IV_RANK_MATERIAL_PCT = 10.0  # cambio relativo que rompe el dedup
+TARGET_LEAPS_DTE = 365       # vencimiento preferido para la regla de calls (~12 meses)
 
 
 # --------------------------------------------------------------------------- #
@@ -118,33 +120,43 @@ def contract_matches(rule: dict, c: dict, spot: float) -> bool:
 
 
 def pick_best(rule: dict, matches: list[dict]) -> dict:
-    if rule["type"] == "sell_put":
-        lo, hi = float(rule["delta_min"]), float(rule["delta_max"])
-    else:
-        lo, hi = float(rule["delta_min"]), float(rule["delta_max"])
-    center = (lo + hi) / 2
-    return min(matches, key=lambda c: abs(abs(c["delta"]) - center))
+    center = (float(rule["delta_min"]) + float(rule["delta_max"])) / 2
+    pool = matches
+    if rule["type"] == "buy_call":
+        # primero el vencimiento más cercano a ~12 meses, luego el delta al centro
+        by_exp: dict[dt.date, list[dict]] = {}
+        for c in matches:
+            by_exp.setdefault(c["expiration"], []).append(c)
+        target_exp = min(by_exp, key=lambda e: abs(by_exp[e][0]["dte"] - TARGET_LEAPS_DTE))
+        pool = by_exp[target_exp]
+    return min(pool, key=lambda c: abs(abs(c["delta"]) - center))
 
 
-def reasons_for(rule: dict, c: dict, ivr: float, spot: float) -> list[str]:
+def reasons_for(rule: dict, c: dict, ivr: float, spot: float, m: dict) -> list[str]:
     ad = abs(c["delta"])
     prem_contract = c["premium"] * 100
     if rule["type"] == "sell_put":
-        otm_pct = (spot - c["strike"]) / spot * 100
         return [
             f"IV Rank {ivr:.0f}% — volatilidad cara vs. su último año, prima inflada",
             f"Delta {ad:.2f} → ≈{ad*100:.0f}% de probabilidad de asignación",
             f"{c['dte']} días a vencimiento ({c['expiration']:%d-%b})",
-            f"Strike ${c['strike']:.0f}, {otm_pct:.1f}% por debajo del precio (${spot:.2f})",
-            f"Prima estimada ${c['premium']:.2f}/acción → ${prem_contract:.0f} por contrato",
+            f"Prima ${c['premium']:.2f}/acción → ${prem_contract:.0f} por contrato",
+            f"Rinde {m['return_on_capital_pct']:.1f}% sobre la garantía (${c['strike']*100:.0f}) "
+            f"en {c['dte']} días ≈ {m['return_annualized_pct']:.0f}%/año",
+            f"Break-even ${m['breakeven_price']:.2f}: la acción puede caer "
+            f"{abs(m['breakeven_move_pct']):.1f}% antes de que pierdas",
         ]
     meses = c["dte"] / 30
     return [
         f"IV Rank {ivr:.0f}% — volatilidad barata, buen momento de entrada (regla ≤ {rule['iv_rank_max']:.0f}%)",
-        f"Delta {ad:.2f} → el contrato se mueve casi 1:1 con la acción, poco castigo por theta",
+        f"Delta {ad:.2f} → se mueve casi 1:1 con la acción, poco castigo por theta",
         f"{c['dte']} días a vencimiento (~{meses:.0f} meses)",
-        f"Strike ${c['strike']:.0f} vs precio ${spot:.2f}",
-        f"Costo ≈${prem_contract:.0f} por contrato para controlar 100 acciones (${spot*100:.0f})",
+        f"Prima ${c['premium']:.2f}/acción = ${m['intrinsic']:.2f} intrínseco + "
+        f"${m['extrinsic']:.2f} de tiempo ({m['premium_pct_of_underlying']:.0f}% del precio)",
+        f"Break-even ${m['breakeven_price']:.2f} → la acción debe subir "
+        f"{m['breakeven_move_pct']:.1f}% para {c['expiration']:%b-%y} ({m['breakeven_move_annualized_pct']:.1f}%/año)",
+        f"Apalancamiento efectivo {m['effective_leverage']:.1f}x — cada $1 se mueve como "
+        f"${m['effective_leverage']:.1f} de acción",
     ]
 
 
@@ -199,6 +211,9 @@ def evaluate(tickers: list[str]) -> list[dict]:
             if is_duplicate(prev, ticker, rule["type"], ivr, best["strike"]):
                 print(f"  {ticker:6} {rule['rule_id']:16} — ya alertado en {DEDUP_HOURS}h (sin cambio material)")
                 continue
+            calc = (put_metrics if rule["type"] == "sell_put" else call_metrics)(
+                spot, best["strike"], best["premium"], best["dte"], best["delta"]
+            )
             alert = {
                 "alert_id": f"{ticker}:{rule['type']}:{sesion.isoformat()}",
                 "ticker": ticker,
@@ -213,7 +228,16 @@ def evaluate(tickers: list[str]) -> list[dict]:
                 "iv_rank": round(ivr, 1),
                 "premium_estimate": best["premium"],
                 "underlying_price": round(spot, 4),
-                "reasons": reasons_for(rule, best, ivr, spot),
+                "intrinsic": calc["intrinsic"],
+                "extrinsic": calc["extrinsic"],
+                "breakeven_price": calc["breakeven_price"],
+                "breakeven_move_pct": calc["breakeven_move_pct"],
+                "breakeven_move_annualized_pct": calc["breakeven_move_annualized_pct"],
+                "premium_pct_of_underlying": calc["premium_pct_of_underlying"],
+                "effective_leverage": calc["effective_leverage"],
+                "return_on_capital_pct": calc.get("return_on_capital_pct"),
+                "return_annualized_pct": calc["return_annualized_pct"],
+                "reasons": reasons_for(rule, best, ivr, spot, calc),
                 "emailed": False,
             }
             alerts.append(alert)
