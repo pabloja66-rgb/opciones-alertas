@@ -246,6 +246,9 @@ async function loadPos(){
     const call = p.type==="buy_call_leaps";
     const open = p.status==="open";
     const pnl = p.pnl_pct==null ? null : Number(p.pnl_pct);
+    const cp = p.current_premium==null ? null : Number(p.current_premium);
+    const pnlUsd = cp==null ? null : (call ? (cp-Number(p.entry_premium)) : (Number(p.entry_premium)-cp)) * 100 * Number(p.contracts||1);
+    const usdTxt = pnlUsd==null ? "" : ` · ${pnlUsd>=0?"+":"−"}$${Math.abs(pnlUsd).toLocaleString("es",{maximumFractionDigits:0})}`;
     const badge = !open ? `<span class="badge b-put" style="background:var(--chip);color:var(--muted)">cerrada</span>`
       : p.exit_signal ? `<span class="badge b-put">🟢 Cerrar con utilidad</span>`
       : `<span class="badge" style="background:var(--chip);color:var(--muted)">🟡 Mantener</span>`;
@@ -257,7 +260,7 @@ async function loadPos(){
         ${badge}
         ${folio?`<span class="muted">· ${esc(folio.name)}</span>`:''}
         <span style="margin-left:auto;font-weight:700;color:${pnlColor(pnl)}">
-          ${pnl==null?'P&L —':(pnl>=0?'+':'')+fmt(pnl,0)+'%'}</span>
+          ${pnl==null?'P&L —':(pnl>=0?'+':'')+fmt(pnl,0)+'%'+usdTxt}</span>
       </div>
       <div class="grid">
         <div class="kv"><span>Strike</span><b>${money(p.strike)}</b></div>
