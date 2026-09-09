@@ -40,6 +40,13 @@ create table if not exists iv_rank_cache (
     window_days_used integer,               -- cuántos días de historial hay
     last_computed   timestamptz not null default now()
 );
+-- columnas extra para el dashboard y el texto de "por qué se disparó"
+alter table iv_rank_cache add column if not exists current_iv     numeric;  -- IV ATM más reciente
+alter table iv_rank_cache add column if not exists iv_percentile  numeric;  -- % de días con IV <= actual
+alter table iv_rank_cache add column if not exists iv_min_window  numeric;
+alter table iv_rank_cache add column if not exists iv_max_window  numeric;
+alter table iv_rank_cache add column if not exists n_observations integer;  -- nº de fotos en la ventana
+alter table iv_rank_cache add column if not exists as_of_date     date;     -- fecha de la IV actual usada
 
 -- ----- Semilla de tickers vigilados ------------------------
 insert into watched_tickers (symbol) values

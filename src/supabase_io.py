@@ -29,6 +29,39 @@ def get_active_tickers() -> list[str]:
     return [row["symbol"] for row in resp.json()]
 
 
+def fetch_iv_history(select: str = "ticker,date,atm_iv") -> list[dict]:
+    """Trae todo iv_history (paginado), ordenado por ticker y fecha."""
+    out: list[dict] = []
+    step = 1000
+    offset = 0
+    while True:
+        resp = _session.get(
+            f"{SUPABASE_URL}/rest/v1/iv_history",
+            headers=_headers(),
+            params={"select": select, "order": "ticker,date",
+                    "limit": step, "offset": offset},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        chunk = resp.json()
+        out.extend(chunk)
+        if len(chunk) < step:
+            return out
+        offset += step
+
+
+def upsert_iv_rank(rows: list[dict]) -> int:
+    resp = _session.post(
+        f"{SUPABASE_URL}/rest/v1/iv_rank_cache",
+        headers=_headers({"Prefer": "resolution=merge-duplicates,return=minimal"}),
+        json=rows,
+        timeout=60,
+    )
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Supabase {resp.status_code}: {resp.text[:400]}")
+    return len(rows)
+
+
 def upsert_iv_history(rows: list[dict], *, batch: int = 500) -> int:
     """Inserta/actualiza en iv_history por (ticker, date). Devuelve filas enviadas."""
     total = 0
