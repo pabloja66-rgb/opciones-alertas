@@ -23,9 +23,12 @@ import config
 from supabase_io import SUPABASE_URL, _headers
 
 DOT = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
-ACTION = {"sell_put": "Vender PUT", "buy_call": "Comprar CALL LEAPS"}
-SECTION_TITLE = {"sell_put": "Vender PUT (generar prima)",
-                 "buy_call": "Comprar CALL LEAPS (sustituto de acción)"}
+ACTION = {"sell_put": "Vender PUT", "buy_call": "Comprar CALL LEAPS",
+          "close_position": "Cerrar posición"}
+SECTION_TITLE = {"buy_call": "Comprar CALL LEAPS (sustituto de acción)",
+                 "sell_put": "Vender PUT (generar prima)",
+                 "close_position": "⚠️ Posiciones para cerrar"}
+SECTION_ORDER = ("close_position", "buy_call", "sell_put")
 
 
 def fetch_unemailed() -> list[dict]:
@@ -69,9 +72,12 @@ def row_html(a: dict) -> str:
     if a["rule_type"] == "buy_call":
         extra = (f"sube {_num(a['breakeven_move_pct'],0):.1f}% a break-even · "
                  f"apalanc. {_num(a['effective_leverage'],0):.1f}x")
-    else:
+    elif a["rule_type"] == "sell_put":
         extra = (f"{_num(a['return_annualized_pct'],0):.0f}%/año · "
                  f"colchón {abs(_num(a['breakeven_move_pct'],0)):.1f}%")
+    else:  # close_position
+        q = ""
+        extra = f"{a.get('dte','?')} días restantes"
     reasons = "".join(f"<li>{r}</li>" for r in (a.get("reasons") or []))
     return f"""
     <tr>
@@ -120,7 +126,7 @@ def build_email(alerts: list[dict]) -> tuple[str, str]:
         f"{DOT[c]} {sum(1 for a in alerts if a.get('quality') == c)}"
         for c in ("green", "yellow", "red")
     )
-    sections = "".join(section_html(rt, by_type[rt]) for rt in ("buy_call", "sell_put") if rt in by_type)
+    sections = "".join(section_html(rt, by_type[rt]) for rt in SECTION_ORDER if rt in by_type)
     link = (f'<p style="font-family:system-ui,Arial;font-size:14px">'
             f'<a href="{config.DASHBOARD_URL}">Ver detalle en el dashboard →</a></p>'
             if config.DASHBOARD_URL else "")

@@ -17,14 +17,16 @@ import traceback
 import daily_capture
 import compute_iv_rank
 import evaluate_rules
+import evaluate_positions
 import send_email
 
 
 STEPS = [
-    ("Captura de IV",      daily_capture.main),
-    ("Cálculo de IV Rank", compute_iv_rank.main),
-    ("Motor de reglas",    evaluate_rules.main),
-    ("Correo",             send_email.main),
+    ("Captura de IV",         daily_capture.main),
+    ("Cálculo de IV Rank",    compute_iv_rank.main),
+    ("Motor de reglas",       evaluate_rules.main),
+    ("Posiciones abiertas",   evaluate_positions.main),
+    ("Correo",                send_email.main),
 ]
 
 

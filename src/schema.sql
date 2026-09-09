@@ -97,38 +97,66 @@ alter table alerts add column if not exists return_annualized_pct        numeric
 alter table alerts add column if not exists quality                      text;     -- 'green' | 'yellow' | 'red'
 alter table alerts add column if not exists quality_detail               jsonb default '[]';  -- color por criterio
 
+-- ----- Portafolios (para agrupar/filtrar posiciones) ------
+create table if not exists portfolios (
+    portfolio_id text        primary key,   -- slug corto
+    name         text        not null,
+    created_at   timestamptz not null default now()
+);
+insert into portfolios (portfolio_id, name) values ('principal', 'Principal')
+on conflict (portfolio_id) do nothing;
+
 -- ----- Posiciones abiertas / simuladas (spec sec. 10) -----
 create table if not exists positions (
     position_id    text        primary key,
     mode           text        not null default 'real',   -- 'real' | 'sim'
+    portfolio_id   text,                                    -- null para simulaciones
     ticker         text        not null,
     type           text        not null,     -- 'sell_put' | 'buy_call_leaps'
     strike         numeric     not null,
     expiration     date        not null,
     entry_premium  numeric     not null,     -- lo que pagó (call) o cobró (put), por acción
     entry_date     date        not null default current_date,
+    entry_iv_rank  numeric,                  -- IV Rank del ticker al abrir (para regla de salida)
     contracts      integer     not null default 1,
     status         text        not null default 'open',    -- 'open' | 'closed'
     exit_premium   numeric,
     exit_date      date,
     notes          text,
+    -- estado calculado por el job diario:
+    current_premium numeric,
+    current_delta   numeric,
+    current_iv_rank numeric,
+    pnl_pct         numeric,                 -- % ganancia/pérdida sobre entry_premium
+    exit_signal     boolean     not null default false,
+    exit_reasons    jsonb       not null default '[]',
+    last_priced     timestamptz,
     created_at     timestamptz not null default now()
 );
 create index if not exists positions_status_idx on positions (status, mode);
+alter table positions add column if not exists portfolio_id    text;
+alter table positions add column if not exists entry_iv_rank   numeric;
+alter table positions add column if not exists current_premium numeric;
+alter table positions add column if not exists current_delta   numeric;
+alter table positions add column if not exists current_iv_rank numeric;
+alter table positions add column if not exists pnl_pct         numeric;
+alter table positions add column if not exists exit_signal     boolean not null default false;
+alter table positions add column if not exists exit_reasons    jsonb not null default '[]';
+alter table positions add column if not exists last_priced     timestamptz;
 
 -- ----- Row Level Security: lectura pública para el dashboard -
 -- El job diario usa la service key y NO pasa por estas políticas.
 do $$
 declare t text;
 begin
-  foreach t in array array['watched_tickers','iv_history','iv_rank_cache','alert_rules','alerts','positions']
+  foreach t in array array['watched_tickers','iv_history','iv_rank_cache','alert_rules','alerts','positions','portfolios']
   loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists anon_read on %I', t);
     execute format('create policy anon_read on %I for select to anon using (true)', t);
   end loop;
-  -- el dashboard puede gestionar la watchlist y las posiciones (simuladas o reales)
-  foreach t in array array['watched_tickers','positions']
+  -- el dashboard puede gestionar la watchlist, las posiciones y los portafolios
+  foreach t in array array['watched_tickers','positions','portfolios']
   loop
     execute format('drop policy if exists anon_write on %I', t);
     execute format('create policy anon_write on %I for all to anon using (true) with check (true)', t);
@@ -146,6 +174,25 @@ on conflict (rule_id) do nothing;
 -- tope de 18 meses para LEAPS en instalaciones previas donde quedó abierto
 update alert_rules set dte_max = 550
  where rule_id = 'buy_call_leaps' and dte_max is null;
+
+-- ----- Reglas de SALIDA (spec sec. 10.2) -------------------
+alter table alert_rules add column if not exists gain_take_profit_pct     numeric;  -- call: ganancia % que dispara
+alter table alert_rules add column if not exists delta_take_profit        numeric;  -- call: delta actual que dispara
+alter table alert_rules add column if not exists iv_rank_jump_pts         numeric;  -- call: subida de IV Rank vs. entrada (puntos)
+alter table alert_rules add column if not exists put_value_pct_of_premium numeric;  -- put: valor actual <= X% de la prima cobrada
+alter table alert_rules add column if not exists gamma_risk_dte           integer;  -- put: DTE por debajo del cual
+alter table alert_rules add column if not exists gamma_risk_max_delta     numeric;  -- put: y |delta| por debajo de (muy OTM)
+
+insert into alert_rules (rule_id, type, applies_to, active, notes,
+                         gain_take_profit_pct, delta_take_profit, iv_rank_jump_pts,
+                         put_value_pct_of_premium, gamma_risk_dte, gamma_risk_max_delta) values
+    ('exit_call_leaps', 'buy_call_leaps', 'open_position', true,
+     'Tomar utilidad en un CALL LEAPS comprado si se cumple CUALQUIERA.',
+     100, 0.90, 25, null, null, null),
+    ('exit_sell_put', 'sell_put', 'open_position', true,
+     'Recomprar y cerrar un PUT vendido si se cumple CUALQUIERA.',
+     null, null, null, 30, 7, 0.10)
+on conflict (rule_id) do nothing;
 
 -- ----- Semilla de tickers vigilados ------------------------
 insert into watched_tickers (symbol) values

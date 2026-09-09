@@ -50,15 +50,37 @@ def fetch_iv_history(select: str = "ticker,date,atm_iv") -> list[dict]:
         offset += step
 
 
-def get_active_rules() -> list[dict]:
+def get_active_rules(applies_to: str = "open") -> list[dict]:
     resp = _session.get(
         f"{SUPABASE_URL}/rest/v1/alert_rules",
         headers=_headers(),
-        params={"select": "*", "active": "eq.true", "applies_to": "eq.open"},
+        params={"select": "*", "active": "eq.true", "applies_to": f"eq.{applies_to}"},
         timeout=30,
     )
     resp.raise_for_status()
     return resp.json()
+
+
+def get_open_positions() -> list[dict]:
+    resp = _session.get(
+        f"{SUPABASE_URL}/rest/v1/positions",
+        headers=_headers(),
+        params={"select": "*", "status": "eq.open", "order": "created_at"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def update_position(position_id: str, fields: dict) -> None:
+    resp = _session.patch(
+        f"{SUPABASE_URL}/rest/v1/positions",
+        headers=_headers({"Prefer": "return=minimal"}),
+        params={"position_id": f"eq.{position_id}"},
+        json=fields,
+        timeout=30,
+    )
+    resp.raise_for_status()
 
 
 def get_iv_rank_map() -> dict[str, dict]:
