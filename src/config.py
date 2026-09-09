@@ -20,6 +20,16 @@ ALPHAVANTAGE_API_KEY = os.environ.get("ALPHAVANTAGE_API_KEY", "").strip()
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "").strip()
 
+# --- Correo (Gmail SMTP + contraseña de aplicación) ---
+GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "pabloja66@gmail.com").strip()
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "").replace(" ", "").strip()
+EMAIL_RECIPIENTS = [
+    e.strip() for e in os.environ.get(
+        "EMAIL_RECIPIENTS", "pabloja66@gmail.com,simonjara2@hotmail.com"
+    ).split(",") if e.strip()
+]
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "").strip()
+
 # --- Parámetros del backfill (spec secciones 4 y 9) ---
 BACKFILL_WEEKS = 52          # ~12 meses, 1 "foto" por semana
 BACKFILL_WEEKDAY = 2         # 0=lunes, 1=martes, 2=miércoles ...

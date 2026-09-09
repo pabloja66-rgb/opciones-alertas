@@ -27,6 +27,7 @@ import sys
 
 from alpha_vantage import AlphaVantageError, global_quote, historical_options
 from metrics import call_metrics, put_metrics
+from scoring import score
 from supabase_io import (
     get_active_rules,
     get_active_tickers,
@@ -165,10 +166,16 @@ def is_duplicate(prev: list[dict], ticker: str, rule_type: str, ivr: float, stri
     for a in prev:
         if a["ticker"] != ticker or a["rule_type"] != rule_type:
             continue
+        if _f(a.get("strike")) != strike:
+            continue
         old_ivr = _f(a.get("iv_rank"))
-        same_strike = _f(a.get("strike")) == strike
-        moved = old_ivr is None or old_ivr == 0 or abs(ivr - old_ivr) / old_ivr * 100 > IV_RANK_MATERIAL_PCT
-        if same_strike and not moved:
+        if old_ivr is None:
+            moved = True
+        elif old_ivr < 1.0:  # IV Rank ~0: comparar en puntos absolutos
+            moved = abs(ivr - old_ivr) > 5.0
+        else:
+            moved = abs(ivr - old_ivr) / old_ivr * 100 > IV_RANK_MATERIAL_PCT
+        if not moved:
             return True
     return False
 
@@ -214,6 +221,7 @@ def evaluate(tickers: list[str]) -> list[dict]:
             calc = (put_metrics if rule["type"] == "sell_put" else call_metrics)(
                 spot, best["strike"], best["premium"], best["dte"], best["delta"]
             )
+            quality, quality_detail = score(rule["type"], {**calc, "iv_rank": ivr})
             alert = {
                 "alert_id": f"{ticker}:{rule['type']}:{sesion.isoformat()}",
                 "ticker": ticker,
@@ -237,11 +245,14 @@ def evaluate(tickers: list[str]) -> list[dict]:
                 "effective_leverage": calc["effective_leverage"],
                 "return_on_capital_pct": calc.get("return_on_capital_pct"),
                 "return_annualized_pct": calc["return_annualized_pct"],
+                "quality": quality,
+                "quality_detail": quality_detail,
                 "reasons": reasons_for(rule, best, ivr, spot, calc),
                 "emailed": False,
             }
             alerts.append(alert)
-            print(f"  {ticker:6} {rule['rule_id']:16} [ALERTA] strike ${best['strike']:.0f} "
+            dot = {"green": "[VERDE] ", "yellow": "[AMARILLO]", "red": "[ROJO]  "}[quality]
+            print(f"  {ticker:6} {rule['rule_id']:16} {dot} strike ${best['strike']:.0f} "
                   f"delta {abs(best['delta']):.2f} dte {best['dte']} prima ${best['premium']:.2f}")
     return alerts
 

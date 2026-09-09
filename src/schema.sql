@@ -94,6 +94,8 @@ alter table alerts add column if not exists premium_pct_of_underlying    numeric
 alter table alerts add column if not exists effective_leverage           numeric;  -- solo calls
 alter table alerts add column if not exists return_on_capital_pct        numeric;  -- solo puts (prima / garantía)
 alter table alerts add column if not exists return_annualized_pct        numeric;  -- solo puts
+alter table alerts add column if not exists quality                      text;     -- 'green' | 'yellow' | 'red'
+alter table alerts add column if not exists quality_detail               jsonb default '[]';  -- color por criterio
 
 -- ----- Semilla de reglas de apertura (spec sec. 3) --------
 insert into alert_rules (rule_id, type, iv_rank_min, iv_rank_max, delta_min, delta_max, dte_min, dte_max, notes) values
