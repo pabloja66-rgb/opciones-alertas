@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alertas de opciones</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#1c2430; --muted:#68727f; --line:#e6e9ee;
+    --accent:#2b6cb0; --green:#1e9e5a; --yellow:#c98a04; --red:#d0342c;
+    --blue:#2b6cb0; --chip:#eef1f5;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0f1319; --card:#171c24; --ink:#e7ebf0; --muted:#93a0b0;
+      --line:#262d38; --chip:#212934; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  a{color:var(--accent)}
+  .wrap{max-width:980px;margin:0 auto;padding:18px 16px 60px}
+  h1{font-size:20px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+  nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+  nav button{background:var(--chip);border:0;color:var(--ink);padding:7px 13px;
+    border-radius:999px;font-size:13px;cursor:pointer}
+  nav button.on{background:var(--accent);color:#fff}
+  section{display:none} section.on{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:14px 15px;margin-bottom:12px}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .tkr{font-weight:700;font-size:17px}
+  .badge{font-size:12px;padding:2px 8px;border-radius:6px;font-weight:600}
+  .b-put{background:rgba(30,158,90,.15);color:var(--green)}
+  .b-call{background:rgba(43,108,176,.15);color:var(--blue)}
+  .dot{width:11px;height:11px;border-radius:50%;display:inline-block;vertical-align:middle}
+  .d-green{background:var(--green)} .d-yellow{background:var(--yellow)} .d-red{background:var(--red)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:12px 0}
+  .kv{font-size:13px} .kv b{display:block;font-size:15px;font-weight:600}
+  .kv span{color:var(--muted)}
+  .why{margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:13px}
+  .why li{margin:2px 0}
+  .crit{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+  .spark{margin-left:auto}
+  .muted{color:var(--muted)}
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+  input,select{background:var(--card);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:14px}
+  .btn{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 14px;
+    font-size:14px;cursor:pointer}
+  .btn.ghost{background:var(--chip);color:var(--ink)}
+  .x{background:none;border:0;color:var(--red);cursor:pointer;font-size:14px}
+  details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 15px;margin-bottom:10px}
+  details summary{cursor:pointer;font-weight:600}
+  details table{margin-top:10px}
+  .err{color:var(--red);font-size:13px}
+  .empty{color:var(--muted);padding:20px 0;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Alertas de opciones</h1>
+  <div class="sub" id="updated">cargando…</div>
+
+  <nav>
+    <button data-t="alertas" class="on">Alertas activas</button>
+    <button data-t="tickers">Mis tickers</button>
+    <button data-t="sim">Simulación</button>
+    <button data-t="guia">Cómo leer</button>
+  </nav>
+
+  <section id="alertas" class="on"><div class="empty">cargando…</div></section>
+
+  <section id="tickers">
+    <div class="card">
+      <div class="row">
+        <input id="newtkr" placeholder="Ticker (ej. NVDA)" maxlength="8" style="text-transform:uppercase">
+        <button class="btn" id="addtkr">Agregar</button>
+      </div>
+      <div class="err" id="tkrerr"></div>
+    </div>
+    <div id="tkrlist"></div>
+  </section>
+
+  <section id="sim">
+    <div class="card">
+      <div class="row" style="gap:8px">
+        <select id="s_type">
+          <option value="buy_call_leaps">Comprar CALL LEAPS</option>
+          <option value="sell_put">Vender PUT</option>
+        </select>
+        <input id="s_tkr" placeholder="Ticker" maxlength="8" style="width:90px;text-transform:uppercase">
+        <input id="s_strike" placeholder="Strike" inputmode="decimal" style="width:90px">
+        <input id="s_exp" type="date" style="width:150px">
+        <input id="s_prem" placeholder="Prima/acción" inputmode="decimal" style="width:110px">
+        <input id="s_ctr" placeholder="Contratos" inputmode="numeric" value="1" style="width:90px">
+        <button class="btn" id="s_add">Registrar simulación</button>
+      </div>
+      <div class="err" id="s_err"></div>
+      <div class="sub" style="margin:8px 0 0">Operaciones de mentira para practicar. No se mezclan con las reales.</div>
+    </div>
+    <div id="simlist"></div>
+  </section>
+
+  <section id="guia"><div class="empty">cargando…</div></section>
+</div>
+
+<script>
+const SB = "https://iryutxgqhozexjxydscl.supabase.co/rest/v1";
+const KEY = "sb_publishable_rG8eb4YKF2YVVtjD7N1HyA_piRgWWi1";
+const H = {apikey:KEY, "Content-Type":"application/json"};
+const q = (p)=>fetch(`${SB}/${p}`,{headers:H}).then(r=>r.json());
+const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = (n,d=2)=> n==null||isNaN(n) ? "—" : Number(n).toLocaleString("es",{maximumFractionDigits:d,minimumFractionDigits:d});
+const money = n => n==null ? "—" : "$"+Number(n).toLocaleString("es",{maximumFractionDigits:0});
+
+// ---- navegación ----
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll("section").forEach(s=>s.classList.toggle("on",s.id===b.dataset.t));
+});
+
+// ---- sparkline ----
+function spark(vals,w=120,h=30){
+  if(!vals || vals.length<2) return "";
+  const mn=Math.min(...vals), mx=Math.max(...vals), rng=mx-mn||1;
+  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-(v-mn)/rng*h).toFixed(1)}`).join(" ");
+  const up = vals[vals.length-1]>=vals[0];
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline fill="none" stroke="${up?'var(--green)':'var(--red)'}" stroke-width="1.5" points="${pts}"/></svg>`;
+}
+
+// ---- ALERTAS ----
+async function loadAlertas(){
+  const since = new Date(Date.now()-14*864e5).toISOString().slice(0,10);
+  const [alerts, ranks, hist] = await Promise.all([
+    q(`alerts?select=*&created_at=gte.${since}&order=created_at.desc`),
+    q(`iv_rank_cache?select=*`),
+    q(`iv_history?select=ticker,date,atm_iv&date=gte.${new Date(Date.now()-120*864e5).toISOString().slice(0,10)}&order=date.asc`)
+  ]);
+  // último alert por ticker+rule_type
+  const seen=new Set(), latest=[];
+  for(const a of alerts){ const k=a.ticker+a.rule_type; if(!seen.has(k)){seen.add(k);latest.push(a);} }
+  const rankBy=Object.fromEntries(ranks.map(r=>[r.ticker,r]));
+  const histBy={}; hist.forEach(r=>(histBy[r.ticker]=histBy[r.ticker]||[]).push(+r.atm_iv));
+
+  latest.sort((a,b)=> (a.rule_type<b.rule_type?-1:1) || ({green:0,yellow:1,red:2}[a.quality]-{green:0,yellow:1,red:2}[b.quality]));
+  const el=document.getElementById("alertas");
+  if(!latest.length){ el.innerHTML=`<div class="empty">Sin alertas en los últimos 14 días.</div>`; return; }
+
+  el.innerHTML = latest.map(a=>{
+    const call = a.rule_type==="buy_call";
+    const rk = rankBy[a.ticker]||{};
+    const dots = (a.quality_detail||[]).map(d=>
+      `<span><span class="dot d-${d.color}"></span> ${esc(d.criterio)}: ${fmt(d.valor,1)}</span>`).join("");
+    const g = call ? `
+        <div class="kv"><span>Debe subir a break-even</span><b>${fmt(a.breakeven_move_pct,1)}%</b></div>
+        <div class="kv"><span>Prima / precio</span><b>${fmt(a.premium_pct_of_underlying,0)}%</b></div>
+        <div class="kv"><span>Apalancamiento</span><b>${fmt(a.effective_leverage,1)}×</b></div>` : `
+        <div class="kv"><span>Rendimiento anualizado</span><b>${fmt(a.return_annualized_pct,0)}%</b></div>
+        <div class="kv"><span>Colchón a break-even</span><b>${fmt(Math.abs(a.breakeven_move_pct),1)}%</b></div>
+        <div class="kv"><span>Rinde sobre garantía</span><b>${fmt(a.return_on_capital_pct,1)}%</b></div>`;
+    return `<div class="card">
+      <div class="row">
+        <span class="dot d-${a.quality}"></span>
+        <span class="tkr">${esc(a.ticker)}</span>
+        <span class="badge ${call?'b-call':'b-put'}">${call?'🔵 Comprar CALL LEAPS':'🟢 Vender PUT'}</span>
+        <span class="muted">precio ${money(a.underlying_price)}</span>
+        ${spark(histBy[a.ticker])}
+      </div>
+      <div class="grid">
+        <div class="kv"><span>Strike</span><b>${money(a.strike)}</b></div>
+        <div class="kv"><span>Vencimiento</span><b>${esc(a.expiration)}</b></div>
+        <div class="kv"><span>DTE</span><b>${a.dte} días</b></div>
+        <div class="kv"><span>Delta</span><b>${fmt(Math.abs(a.delta),2)}</b></div>
+        <div class="kv"><span>IV Rank</span><b>${fmt(a.iv_rank,0)}%</b></div>
+        <div class="kv"><span>Theta</span><b>${fmt(a.theta,3)}</b></div>
+        <div class="kv"><span>Prima</span><b>${fmt(a.premium_estimate,2)}/acc.</b></div>
+        ${g}
+      </div>
+      <ul class="why">${(a.reasons||[]).map(r=>`<li>${esc(r)}</li>`).join("")}</ul>
+      <div class="crit">${dots}</div>
+    </div>`;
+  }).join("");
+}
+
+// ---- TICKERS ----
+async function loadTickers(){
+  const list = await q(`watched_tickers?select=symbol,active&order=symbol`);
+  document.getElementById("tkrlist").innerHTML = `<div class="card"><table><tbody>` +
+    list.map(t=>`<tr><td><b>${esc(t.symbol)}</b></td>
+      <td class="muted">${t.active?'vigilado':'inactivo'}</td>
+      <td style="text-align:right"><button class="x" data-del="${esc(t.symbol)}">Quitar</button></td></tr>`).join("") +
+    `</tbody></table></div>`;
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
+    if(!confirm(`¿Quitar ${b.dataset.del} del monitoreo?`)) return;
+    await fetch(`${SB}/watched_tickers?symbol=eq.${b.dataset.del}`,{method:"DELETE",headers:H});
+    loadTickers();
+  });
+}
+document.getElementById("addtkr").onclick = async ()=>{
+  const v = document.getElementById("newtkr").value.trim().toUpperCase();
+  const err = document.getElementById("tkrerr"); err.textContent="";
+  if(!/^[A-Z.]{1,8}$/.test(v)){ err.textContent="Ticker inválido."; return; }
+  const r = await fetch(`${SB}/watched_tickers`,{method:"POST",headers:{...H,Prefer:"resolution=merge-duplicates"},
+    body:JSON.stringify({symbol:v,active:true})});
+  if(!r.ok){ err.textContent="No se pudo agregar ("+r.status+")."; return; }
+  document.getElementById("newtkr").value=""; loadTickers();
+};
+
+// ---- SIMULACIÓN ----
+async function loadSim(){
+  const rows = await q(`positions?select=*&mode=eq.sim&order=created_at.desc`);
+  const el=document.getElementById("simlist");
+  if(!rows.length){ el.innerHTML=`<div class="empty">Sin simulaciones todavía.</div>`; return; }
+  el.innerHTML = `<div class="card"><table>
+    <thead><tr><th>Ticker</th><th>Tipo</th><th>Strike</th><th>Venc.</th><th>Prima</th><th>Contr.</th><th>Estado</th><th></th></tr></thead>
+    <tbody>` + rows.map(p=>`<tr>
+      <td><b>${esc(p.ticker)}</b></td>
+      <td>${p.type==="sell_put"?"Vender PUT":"Comprar CALL"}</td>
+      <td>${money(p.strike)}</td><td>${esc(p.expiration)}</td>
+      <td>${fmt(p.entry_premium,2)}</td><td>${p.contracts}</td>
+      <td class="muted">${p.status==="open"?"abierta":"cerrada"}</td>
+      <td style="text-align:right">${p.status==="open"?`<button class="x" data-close="${p.position_id}">Cerrar</button>`:""}
+        <button class="x" data-delp="${p.position_id}">✕</button></td>
+    </tr>`).join("") + `</tbody></table></div>`;
+  document.querySelectorAll("[data-delp]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("¿Borrar esta simulación?")) return;
+    await fetch(`${SB}/positions?position_id=eq.${b.dataset.delp}`,{method:"DELETE",headers:H}); loadSim();
+  });
+  document.querySelectorAll("[data-close]").forEach(b=>b.onclick=async()=>{
+    const px = prompt("Prima de salida por acción (lo que valdría ahora el contrato):");
+    if(px==null) return;
+    await fetch(`${SB}/positions?position_id=eq.${b.dataset.close}`,{method:"PATCH",headers:H,
+      body:JSON.stringify({status:"closed",exit_premium:parseFloat(px),exit_date:new Date().toISOString().slice(0,10)})});
+    loadSim();
+  });
+}
+document.getElementById("s_add").onclick = async ()=>{
+  const err=document.getElementById("s_err"); err.textContent="";
+  const p={
+    position_id: "sim_"+Date.now(),
+    mode:"sim",
+    ticker:(document.getElementById("s_tkr").value||"").trim().toUpperCase(),
+    type:document.getElementById("s_type").value==="sell_put"?"sell_put":"buy_call_leaps",
+    strike:parseFloat(document.getElementById("s_strike").value),
+    expiration:document.getElementById("s_exp").value,
+    entry_premium:parseFloat(document.getElementById("s_prem").value),
+    contracts:parseInt(document.getElementById("s_ctr").value||"1",10),
+    entry_date:new Date().toISOString().slice(0,10),
+    status:"open"
+  };
+  if(!p.ticker || !p.strike || !p.expiration || !p.entry_premium){ err.textContent="Completa ticker, strike, vencimiento y prima."; return; }
+  const r = await fetch(`${SB}/positions`,{method:"POST",headers:H,body:JSON.stringify(p)});
+  if(!r.ok){ err.textContent="No se pudo registrar ("+r.status+")."; return; }
+  ["s_tkr","s_strike","s_exp","s_prem"].forEach(id=>document.getElementById(id).value="");
+  loadSim();
+};
+
+// ---- GUÍA ----
+async function loadGuia(){
+  const rules = await q(`alert_rules?select=*&order=rule_id`);
+  const r = Object.fromEntries(rules.map(x=>[x.type,x]));
+  const sp=r.sell_put||{}, bc=r.buy_call||{};
+  document.getElementById("guia").innerHTML = `
+  <details open><summary>El semáforo 🟢 / 🟡 / 🔴</summary>
+    <p class="muted">Se calcula por puntos (🟢=2, 🟡=1, 🔴=0). Cualquier criterio en rojo topa el global en amarillo.
+    <b>No es una orden de compra</b>: dice qué tan favorable está la mecánica (prima, volatilidad, apalancamiento).
+    La convicción sobre la empresa y el tamaño de la posición los decides tú.</p></details>
+
+  <details><summary>Comprar CALL LEAPS — cómo leerlo</summary>
+    <table><thead><tr><th>Criterio</th><th>🟢</th><th>🟡</th><th>🔴</th><th>Qué mide</th></tr></thead><tbody>
+    <tr><td>IV Rank</td><td>≤ 20</td><td>20–40</td><td>&gt; 40</td><td>Qué tan barata está la volatilidad vs. su último año.</td></tr>
+    <tr><td>Subida a break-even</td><td>&lt; 10%</td><td>10–20%</td><td>&gt; 20%</td><td>Cuánto debe subir la acción para empatar al vencimiento.</td></tr>
+    <tr><td>Apalancamiento</td><td>≥ 2.5×</td><td>1.8–2.5×</td><td>&lt; 1.8×</td><td>Por cada $1 que pones, a cuántos $ de acción quedas expuesto.</td></tr>
+    </tbody></table>
+    <p class="muted"><b>Prima = intrínseco + extrínseco.</b> El intrínseco (precio − strike) ya lo tienes; el extrínseco es lo que pagas por el tiempo y es lo que se evapora si la acción no se mueve. La "subida a break-even" ≈ extrínseco ÷ precio.<br>
+    <b>Apalancamiento = (precio × delta) ÷ prima.</b> Con la misma plata sigues el movimiento de más acciones; a cambio, la acción debe superar el break-even antes de que la ventaja te dé ganancia. Si arranca cerca de 1×, casi no hay ventaja sobre comprar la acción.<br>
+    <b>El sistema no juzga</b> tu convicción en la empresa ni el tamaño: 1 contrato = 100 acciones, dimensiona por ese nominal.</p></details>
+
+  <details><summary>Vender PUT — cómo leerlo</summary>
+    <table><thead><tr><th>Criterio</th><th>🟢</th><th>🟡</th><th>Qué mide</th></tr></thead><tbody>
+    <tr><td>IV Rank</td><td>≥ 65</td><td>55–65</td><td>Volatilidad cara = prima más gorda por el mismo riesgo.</td></tr>
+    <tr><td>Rendimiento anualizado</td><td>≥ 20%</td><td>12–20%</td><td>Prima ÷ capital de garantía, a base anual.</td></tr>
+    <tr><td>Colchón a break-even</td><td>≥ 12%</td><td>7–12%</td><td>Cuánto puede caer la acción antes de que empieces a perder.</td></tr>
+    </tbody></table>
+    <p class="muted"><b>Break-even = strike − prima.</b> Aunque te asignen al strike, ya cobraste la prima, así que tu costo real es más bajo. El colchón es cuánto está ese punto por debajo del precio de hoy.<br>
+    <b>Delta 0.20–0.30</b> ≈ 20–30% de probabilidad de que te asignen (termines comprando la acción al strike).<br>
+    <b>El sistema no juzga</b> si quieres tener esa acción: solo vende puts sobre acciones que te quedarías tranquilo comprando a ese strike.</p></details>
+
+  <details><summary>Reglas de entrada (vigentes)</summary>
+    <table><thead><tr><th></th><th>Vender PUT</th><th>Comprar CALL LEAPS</th></tr></thead><tbody>
+    <tr><td>IV Rank</td><td>≥ ${sp.iv_rank_min ?? '—'}</td><td>≤ ${bc.iv_rank_max ?? '—'}</td></tr>
+    <tr><td>Delta (|abs|)</td><td>${sp.delta_min}–${sp.delta_max}</td><td>${bc.delta_min}–${bc.delta_max}</td></tr>
+    <tr><td>Días a vencimiento</td><td>${sp.dte_min}–${sp.dte_max}</td><td>${bc.dte_min}–${bc.dte_max ?? '∞'} (prefiere ~365)</td></tr>
+    <tr><td>Strike</td><td>≤ precio actual</td><td>—</td></tr>
+    </tbody></table></details>`;
+}
+
+// ---- init ----
+(async function(){
+  try{
+    await Promise.all([loadAlertas(), loadTickers(), loadSim(), loadGuia()]);
+    const last = await q(`iv_history?select=date&order=date.desc&limit=1`).catch(()=>[]);
+    document.getElementById("updated").textContent =
+      "Datos hasta " + ((last[0]&&last[0].date) || "—") + " · el correo diario corre tras el cierre de EE.UU.";
+  }catch(e){
+    document.getElementById("updated").innerHTML = `<span class="err">Error cargando datos: ${esc(e.message)}</span>`;
+  }
+})();
+</script>
+</body>
+</html>

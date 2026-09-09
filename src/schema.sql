@@ -97,6 +97,44 @@ alter table alerts add column if not exists return_annualized_pct        numeric
 alter table alerts add column if not exists quality                      text;     -- 'green' | 'yellow' | 'red'
 alter table alerts add column if not exists quality_detail               jsonb default '[]';  -- color por criterio
 
+-- ----- Posiciones abiertas / simuladas (spec sec. 10) -----
+create table if not exists positions (
+    position_id    text        primary key,
+    mode           text        not null default 'real',   -- 'real' | 'sim'
+    ticker         text        not null,
+    type           text        not null,     -- 'sell_put' | 'buy_call_leaps'
+    strike         numeric     not null,
+    expiration     date        not null,
+    entry_premium  numeric     not null,     -- lo que pagó (call) o cobró (put), por acción
+    entry_date     date        not null default current_date,
+    contracts      integer     not null default 1,
+    status         text        not null default 'open',    -- 'open' | 'closed'
+    exit_premium   numeric,
+    exit_date      date,
+    notes          text,
+    created_at     timestamptz not null default now()
+);
+create index if not exists positions_status_idx on positions (status, mode);
+
+-- ----- Row Level Security: lectura pública para el dashboard -
+-- El job diario usa la service key y NO pasa por estas políticas.
+do $$
+declare t text;
+begin
+  foreach t in array array['watched_tickers','iv_history','iv_rank_cache','alert_rules','alerts','positions']
+  loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists anon_read on %I', t);
+    execute format('create policy anon_read on %I for select to anon using (true)', t);
+  end loop;
+  -- el dashboard puede gestionar la watchlist y las posiciones (simuladas o reales)
+  foreach t in array array['watched_tickers','positions']
+  loop
+    execute format('drop policy if exists anon_write on %I', t);
+    execute format('create policy anon_write on %I for all to anon using (true) with check (true)', t);
+  end loop;
+end $$;
+
 -- ----- Semilla de reglas de apertura (spec sec. 3) --------
 insert into alert_rules (rule_id, type, iv_rank_min, iv_rank_max, delta_min, delta_max, dte_min, dte_max, notes) values
     ('sell_put_income', 'sell_put', 55, null, 0.20, 0.30, 25, 45,
